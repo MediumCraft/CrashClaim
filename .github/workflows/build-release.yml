@@ -1,0 +1,101 @@
+name: Build CrashClaim
+
+# On each push to the paths
+on:
+  push:
+    paths:
+    - 'src/**'
+    - 'gradle/**'
+    - 'build.gradle'
+    - 'build.gradle.kts'
+    - 'settings.gradle'
+    - 'settings.gradle.kts'
+    - 'gradle.properties'
+    - 'gradlew'
+    - 'gradlew.bat'
+    - '.github/workflows/build-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Fetches the repository at the start of a run
+      - name: Checkout latest code
+        uses: actions/checkout@v2
+
+      # Get the short version of the SHA to identify the release versions
+      - name: Set outputs
+        id: vars
+        #run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      # Setup JDK 17
+      - name: Set up JDK 17
+        uses: actions/setup-java@v2
+        with:
+          distribution: 'temurin'
+          java-version: 17
+
+      # TODO: Fix build caches
+      # Currently not working
+      - name: Setup build cache
+        uses: actions/cache@v2.1.6
+        with:
+          path: ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts') }}
+      
+      # Bug fix
+      - name: Gradle Permission
+        run: chmod +x ./gradlew
+      
+      - name: Build with Gradle
+        run: ./gradlew build --full-stacktrace
+        continue-on-error: true # So it can upload the dev_env.zip for debug
+        
+      - name: Archive Repository
+        run: |
+          # Create a zip file of the entire repository contents
+          zip -r dev_env.zip .
+      
+      # Upload it twice so you can download anywhere?
+      # I mean, artifacts can be bigger than releases, but only lasts 90 days unless you want to pay. I don't.
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: CrashClaim-${{ steps.vars.outputs.sha_short }}
+          path: build/libs
+        continue-on-error: true
+      
+      # Very important
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: dev_env-${{ steps.vars.outputs.sha_short }}
+          path: dev_env.zip
+        continue-on-error: true
+      
+      - name: Release Files
+        uses: softprops/action-gh-release@v1
+        with: 
+          token: ${{ secrets.RELEASE_KEY }} # Change with the Actions secret variable name! Don't just change one!
+          files: |
+            build/libs/*.jar
+            dev_env.zip
+          tag_name: commit-${{ steps.vars.outputs.sha_short }}
+          name: CrashClaim ${{ steps.vars.outputs.sha_short }}
+          body: |
+            Commit ${{ steps.vars.outputs.sha_short }}
+            CrashClaim
+          generate_release_notes: true # Adds the link to view diff
+        env:
+          GITHUB_REPOSITORY: MediumCraft/CrashClaim # Change MediumCraft to the repository owner! For example: LeeHansHinLun/CrashClaim = GITHUB_REPOSITORY: LeeHansHinLun/CrashClaim
+          # But it is too simple so I hope no one forgets!
+          # PS: Don't upload to my repositories
+        continue-on-error: true # Added so it doesn't fail when dev_env.zip is too large.
