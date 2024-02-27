@@ -40,6 +40,7 @@ import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.io.InputStream;
 
 public class CrashClaim extends JavaPlugin {
     private static CrashClaim plugin;
@@ -79,6 +80,27 @@ public class CrashClaim extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        try (InputStream stream = this.getResource("notes")) {
+            if (stream != null && stream.available() > 0) {
+            
+            } else {
+                getPluginLoader().disablePlugin(this);
+                return;
+            }
+        } catch (Exception exception1) {
+            try (InputStream stream = this.getResource("notes.txt")) {
+                if (stream != null && stream.available() > 0) {
+        
+                } else {
+                   getPluginLoader().disablePlugin(this);
+                   return; 
+                }
+            } catch (Exception exception2) {
+                getPluginLoader().disablePlugin(this);
+                return;
+            }
+        }
+        
         Bukkit.getPluginManager().registerEvents(pluginSupport, this);
 
         taskChainFactory = BukkitTaskChainFactory.create(this);
